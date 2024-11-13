@@ -1,0 +1,2 @@
+Flask                     # The Flask framework for creating the web server
+mysql-connector-python    # MySQL connector library to interact with the MySQL database

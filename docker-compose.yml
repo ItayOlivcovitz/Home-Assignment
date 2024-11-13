@@ -1,65 +1,66 @@
 services:
   # Database Service (MySQL)
   db:
-    image: mysql:8                            # Use MySQL version 8 image
+    image: mysql:8
     environment:
-      MYSQL_ROOT_PASSWORD: admin               # Set root password for MySQL
-      MYSQL_DATABASE: mydb                     # Set the initial database name
+      MYSQL_ROOT_PASSWORD: 'admin'
+      MYSQL_DATABASE: 'mydb'
     volumes:
-      - db_data:/var/lib/mysql                 # Mount volume for persisting MySQL data
-      - db_logs:/var/log/mysql                 # Mount volume for persisting MySQL logs
+      - db_data:/var/lib/mysql                # Use named volume for persisting MySQL data
+      - db_logs:/var/log/mysql                # Use named volume for persisting MySQL logs
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Run SQL script at startup to initialize tables
-      - ./my.cnf:/etc/mysql/my.cnf             # Custom MySQL configuration file
+      - ./my.cnf:/etc/mysql/my.cnf            # Custom MySQL configuration file
     networks:
-      - app-network                            # Connect to the shared application network
-    restart: unless-stopped                    # Restart automatically unless manually stopped
+      - app-network
+    restart: unless-stopped
 
   # Flask Application Service
   app:
-    build: ./app                               # Build the app from the Dockerfile in the ./app directory
+    build: ./app
     networks:
-      - app-network                            # Connect to the shared application network
+      - app-network
     depends_on:
-      - db                                     # Start this service only after the db service starts
+      - db
     environment:
-      FLASK_ENV: production                    # Set Flask environment to production
-      DATABASE_HOST: db                        # Specify the database host (service name of db)
-      DATABASE_USER: root                      # Database user to connect as
-      DATABASE_PASSWORD: admin                 # Database password
-      DATABASE_NAME: mydb                      # Database name to use
-      TZ: Asia/Jerusalem                       # Set timezone to Israel Time (IST)
+      FLASK_ENV: production
+      DATABASE_HOST: db
+      DATABASE_USER: root
+      DATABASE_PASSWORD: admin
+      DATABASE_NAME: mydb
+      TZ: Asia/Jerusalem
     volumes:
-      - ./logs:/app/logs                       # Mount logs directory on host to container logs directory
+      - logs:/app/logs                       # Use named volume for persisting application logs
     logging:
-      driver: "json-file"                      # Set logging driver to JSON file format
+      driver: "json-file"
       options:
-        max-size: "10m"                        # Rotate log files at 10MB size
-        max-file: "3"                          # Keep a maximum of 3 log files
+        max-size: "10m"
+        max-file: "3"
     deploy:
-      replicas: 3                              # Run 3 replicas of the application container
+      replicas: 3
       restart_policy:
         condition: on-failure
-    restart: unless-stopped                    # Restart automatically unless manually stopped
+    restart: unless-stopped
 
   # Nginx Load Balancer Service
   nginx:
-    image: nginx:latest                        # Use the latest official Nginx image
+    image: nginx:latest
     ports:
-      - "80:80"                                # Expose port 80 on the host for incoming HTTP traffic
+      - "80:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf     # Mount custom Nginx configuration file
+      - ./nginx.conf:/etc/nginx/nginx.conf
     networks:
-      - app-network                            # Connect to the shared application network
+      - app-network
     depends_on:
-      - app                                    # Start Nginx only after app service is available
+      - app
     environment:
-      - TZ=Asia/Jerusalem                      # Set timezone for Nginx
-    restart: unless-stopped                    # Restart automatically unless manually stopped
+      - TZ=Asia/Jerusalem
+    restart: unless-stopped
 
 # Volume Definitions
 volumes:
-  db_data:                                     # Volume for persisting MySQL data
-  db_logs:                                     # Volume for persisting MySQL logs
+  db_data:                                     # Named volume for MySQL data
+  db_logs:                                     # Named volume for MySQL logs
+  logs:                                        # Named volume for application logs
 
 # Network Definition
 networks:
