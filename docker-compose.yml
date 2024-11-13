@@ -1,0 +1,66 @@
+services:
+  # Database Service (MySQL)
+  db:
+    image: mysql:8                            # Use MySQL version 8 image
+    environment:
+      MYSQL_ROOT_PASSWORD: admin               # Set root password for MySQL
+      MYSQL_DATABASE: mydb                     # Set the initial database name
+    volumes:
+      - db_data:/var/lib/mysql                 # Mount volume for persisting MySQL data
+      - db_logs:/var/log/mysql                 # Mount volume for persisting MySQL logs
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Run SQL script at startup to initialize tables
+      - ./my.cnf:/etc/mysql/my.cnf             # Custom MySQL configuration file
+    networks:
+      - app-network                            # Connect to the shared application network
+    restart: unless-stopped                    # Restart automatically unless manually stopped
+
+  # Flask Application Service
+  app:
+    build: ./app                               # Build the app from the Dockerfile in the ./app directory
+    networks:
+      - app-network                            # Connect to the shared application network
+    depends_on:
+      - db                                     # Start this service only after the db service starts
+    environment:
+      FLASK_ENV: production                    # Set Flask environment to production
+      DATABASE_HOST: db                        # Specify the database host (service name of db)
+      DATABASE_USER: root                      # Database user to connect as
+      DATABASE_PASSWORD: admin                 # Database password
+      DATABASE_NAME: mydb                      # Database name to use
+      TZ: Asia/Jerusalem                       # Set timezone to Israel Time (IST)
+    volumes:
+      - ./logs:/app/logs                       # Mount logs directory on host to container logs directory
+    logging:
+      driver: "json-file"                      # Set logging driver to JSON file format
+      options:
+        max-size: "10m"                        # Rotate log files at 10MB size
+        max-file: "3"                          # Keep a maximum of 3 log files
+    deploy:
+      replicas: 3                              # Run 3 replicas of the application container
+      restart_policy:
+        condition: on-failure
+    restart: unless-stopped                    # Restart automatically unless manually stopped
+
+  # Nginx Load Balancer Service
+  nginx:
+    image: nginx:latest                        # Use the latest official Nginx image
+    ports:
+      - "80:80"                                # Expose port 80 on the host for incoming HTTP traffic
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf     # Mount custom Nginx configuration file
+    networks:
+      - app-network                            # Connect to the shared application network
+    depends_on:
+      - app                                    # Start Nginx only after app service is available
+    environment:
+      - TZ=Asia/Jerusalem                      # Set timezone for Nginx
+    restart: unless-stopped                    # Restart automatically unless manually stopped
+
+# Volume Definitions
+volumes:
+  db_data:                                     # Volume for persisting MySQL data
+  db_logs:                                     # Volume for persisting MySQL logs
+
+# Network Definition
+networks:
+  app-network:                                 # Network for communication between services
