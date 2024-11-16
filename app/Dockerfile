@@ -1,6 +1,9 @@
 # Use the official Python 3.9 slim image as the base image
 FROM python:3.9-slim
 
+# Set the PYTHONUNBUFFERED environment variable to ensure unbuffered output
+ENV PYTHONUNBUFFERED=1
+
 # Set the working directory inside the container
 WORKDIR /app
 

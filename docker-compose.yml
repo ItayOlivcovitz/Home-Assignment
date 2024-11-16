@@ -1,67 +1,77 @@
 services:
   # Database Service (MySQL)
   db:
-    image: mysql:8
+    image: mysql:8  # Use the official MySQL 8 Docker image
     environment:
-      MYSQL_ROOT_PASSWORD: 'admin'
-      MYSQL_DATABASE: 'mydb'
+      MYSQL_ROOT_PASSWORD: 'admin'  # Set root password for MySQL
+      MYSQL_DATABASE: 'mydb'  # Create a database named 'mydb'
     volumes:
-      - db_data:/var/lib/mysql                # Use named volume for persisting MySQL data
-      - db_logs:/var/log/mysql                # Use named volume for persisting MySQL logs
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Run SQL script at startup to initialize tables
-      - ./my.cnf:/etc/mysql/my.cnf            # Custom MySQL configuration file
+      - ./data/db:/var/lib/mysql  # Persist MySQL data on the host machine
+      - ./logs/db:/var/log/mysql  # Persist MySQL logs on the host machine
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql  # Initialize the database using a custom SQL script
+      - ./db/my.cnf:/etc/mysql/my.cnf:ro  # Use a custom MySQL configuration file in read-only mode
     networks:
-      - app-network
-    restart: unless-stopped
+      - app-network  # Connect the database service to the custom application network
+    restart: unless-stopped  # Restart the container unless explicitly stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin"]  # Health check command to ensure MySQL is running
+      interval: 30s  # Check the health every 30 seconds
+      timeout: 10s  # Health check timeout after 10 seconds
+      retries: 5  # Retry health check 5 times before marking as unhealthy
+      start_period: 10s  # Initial delay of 10 seconds before starting health checks
+
 
   # Flask Application Service
   app:
-    build: ./app
+    build: ./app  # Build the Docker image for the application using the ./app directory
     networks:
-      - app-network
+      - app-network  # Connect the application service to the custom application network
     depends_on:
-      - db
+      - db  # Ensure the database service starts before the application service
     environment:
-      FLASK_ENV: production
-      DATABASE_HOST: db
-      DATABASE_USER: root
-      DATABASE_PASSWORD: admin
-      DATABASE_NAME: mydb
-      TZ: Asia/Jerusalem
+      FLASK_ENV: production  # Set Flask to run in production mode
+      DATABASE_HOST: db  # Configure the database host as 'db'
+      DATABASE_USER: root  # Use the root user to connect to the database
+      DATABASE_PASSWORD: admin  # Set the root user password
+      DATABASE_NAME: mydb  # Use 'mydb' as the database name
+      TZ: Asia/Jerusalem  # Set the timezone for the application
     volumes:
-      - logs:/app/logs                       # Use named volume for persisting application logs
+      - ./logs/app:/app/logs  # Bind mount for application logs on the host machine
     logging:
-      driver: "json-file"
+      driver: "json-file"  # Use JSON-file logging driver
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "10m"  # Limit log file size to 10MB
+        max-file: "3"  # Keep up to 3 rotated log files
     deploy:
-      replicas: 3
+      replicas: 3  # Deploy 3 replicas of the application service
       restart_policy:
-        condition: on-failure
-    restart: unless-stopped
+        condition: on-failure  # Restart containers if they fail
+    restart: unless-stopped  # Restart the container unless explicitly stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]  # Check if the Flask application is reachable
+      interval: 30s  # Perform the health check every 30 seconds
+      timeout: 10s  # Timeout for the health check is 10 seconds
+      retries: 3  # Retry the health check 3 times before marking the service unhealthy
+      start_period: 10s  # Delay health checks for 10 seconds after the container starts
 
-  # Nginx Load Balancer Service
+
+    # Nginx Load Balancer Service
   nginx:
-    image: nginx:latest
+    image: nginx:latest  # Use the latest official NGINX Docker image
     ports:
-      - "80:80"
+      - "80:80"  # Map port 80 on the host to port 80 in the container
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro  # Use a custom NGINX configuration file in read-only mode
+      - ./logs/nginx:/var/log/nginx  # Bind mount for NGINX logs on the host machine
     networks:
-      - app-network
+      - app-network  # Connect the NGINX service to the custom application network
     depends_on:
-      - app
+      - app  # Ensure the application service starts before the NGINX service
     environment:
-      - TZ=Asia/Jerusalem
-    restart: unless-stopped
+      - TZ=Asia/Jerusalem  # Set the timezone for the NGINX container
+    restart: unless-stopped  # Restart the container unless explicitly stopped
 
-# Volume Definitions
-volumes:
-  db_data:                                     # Named volume for MySQL data
-  db_logs:                                     # Named volume for MySQL logs
-  logs:                                        # Named volume for application logs
 
 # Network Definition
 networks:
-  app-network:                                 # Network for communication between services
+  app-network:  # Define a custom network for communication between services
