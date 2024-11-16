@@ -85,7 +85,7 @@ Installation
 1. **Clone the Repository:**
 
 ```bash
-git clone https://github.com/your-username/your-private-repo.git
+git clone https://github.com/ItayOlivcovitz/Home-Assignment
 cd your-private-repo
 ```
 
