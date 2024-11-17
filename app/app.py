@@ -25,76 +25,77 @@ logger = logging.getLogger(__name__)
 # Flask app instance
 app = Flask(__name__)
 
-# Database connection configuration
+# Check if required environment variables are set
+required_vars = ['DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_HOST', 'DATABASE_NAME']
+for var in required_vars:
+    if not os.getenv(var):
+        raise EnvironmentError(f"Required environment variable {var} not set")
+
+# Database connection configuration using environment variables
 db_config = {
-    'user': 'root',
-    'password': 'admin',
-    'host': 'db',  # MySQL service name in docker-compose.yml
-    'database': 'mydb',
+    'user': os.getenv('DATABASE_USER'),
+    'password': os.getenv('DATABASE_PASSWORD'),
+    'host': os.getenv('DATABASE_HOST'),
+    'database': os.getenv('DATABASE_NAME'),
 }
 
 # Establish a database connection
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
+# Helper function to execute queries
+def execute_query(query, params=(), fetch_one=False):
+    conn = None  # Initialize connection variable
+    cursor = None  # Initialize cursor variable
+    try:
+        conn = get_db_connection()  # Establish a database connection
+        cursor = conn.cursor()  # Create a cursor to interact with the database
+        cursor.execute(query, params)  # Execute the given query with parameters
+        if fetch_one:
+            return cursor.fetchone()  # Fetch a single row if requested
+        else:
+            conn.commit()  # Commit the transaction if not fetching data
+    except mysql.connector.Error as e:
+        app.logger.error(f"Database error: {e}")  # Log any database-specific errors
+        raise  # Re-raise the exception to notify the caller
+    except Exception as e:
+        app.logger.error(f"Unexpected error: {e}")  # Log any other unexpected exceptions
+        raise  # Re-raise the exception to notify the caller
+    finally:
+        if cursor:
+            cursor.close()  # Ensure the cursor is closed to release resources
+        if conn:
+            conn.close()  # Ensure the connection is closed to prevent leaks
+
 @app.route('/')
 def index():
-    conn = None  # Initialize conn to None
     try:
-        # Connect to the database
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # Increment the global counter
+        execute_query("UPDATE counter SET count = count + 1")
 
-        try:
-            # Increment the global counter
-            cursor.execute("UPDATE counter SET count = count + 1")
-            conn.commit()
+        # Get server IP and log client access
+        server_ip = socket.gethostbyname(socket.gethostname())  # Get the IP address of the server where the application is running
+        client_ip = request.remote_addr                         # Get the IP address of the client making the request
+        date_time = datetime.now()                              # Get the current date and time for logging purposes
 
-            # Get server IP and log client access
-            server_ip = socket.gethostbyname(socket.gethostname())
-            client_ip = request.remote_addr
-            date_time = datetime.now()
+        execute_query(
+            "INSERT INTO access_log (date, client_ip, server_ip) VALUES (%s, %s, %s)",
+            params=(date_time, client_ip, server_ip)
+        )
 
-            cursor.execute(
-                "INSERT INTO access_log (date, client_ip, server_ip) VALUES (%s, %s, %s)",
-                (date_time, client_ip, server_ip)
-            )
-            conn.commit()
-
-            # Create the response
-            response = make_response(f"server ip: {server_ip}")
-        except Exception as e:
-            # Log and handle any database operation errors
-            app.logger.error(f"Database operation failed: {e}")
-            conn.rollback()
-            return make_response("An error occurred while processing the request.", 500)
-        finally:
-            # Ensure the cursor is closed
-            cursor.close()
-
-        return response
+        # Create the response
+        return make_response(f"server ip: {server_ip}")
     except Exception as e:
-        # Log and handle any connection errors
-        app.logger.error(f"Failed to connect to the database: {e}")
-        return make_response("An error occurred while connecting to the database.", 500)
-    finally:
-        # Ensure the connection is closed
-        if conn:
-            conn.close()
+        app.logger.error(f"Error in index route: {e}")
+        return make_response("An error occurred while processing the request.", 500)
 
 
 # Route to display the global counter value
 @app.route('/showcount')
 def showcount():
-    conn = None  # Initialize the database connection to None
     try:
-        # Establish a connection to the database
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         # Query to fetch the current value of the counter
-        cursor.execute("SELECT count FROM counter")
-        result = cursor.fetchone()
+        result = execute_query("SELECT count FROM counter", fetch_one=True)
 
         if result is None:
             # Handle case where the counter table is empty
@@ -117,10 +118,6 @@ def showcount():
         # Log any other unexpected exceptions
         app.logger.error(f"Unexpected error: {e}")
         return "An unexpected error occurred", 500
-    finally:
-        # Ensure the database resources are properly closed
-        if conn:
-            conn.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

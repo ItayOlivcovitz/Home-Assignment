@@ -1,15 +1,17 @@
 services:
   # Database Service (MySQL)
   db:
-    image: mysql:8  # Use the official MySQL 8 Docker image
+    build:
+     context: .  # Use the current directory as the build context
+     dockerfile: db/Dockerfile  # Use the custom Dockerfile
     environment:
       MYSQL_ROOT_PASSWORD: 'admin'  # Set root password for MySQL
       MYSQL_DATABASE: 'mydb'  # Create a database named 'mydb'
     volumes:
       - ./data/db:/var/lib/mysql  # Persist MySQL data on the host machine
-      - ./logs/db:/var/log/mysql  # Persist MySQL logs on the host machine
+      - ./logs/db:/var/log/mysql           # Mount local log directory to MySQL log directory
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql  # Initialize the database using a custom SQL script
-      - ./db/my.cnf:/etc/mysql/my.cnf:ro  # Use a custom MySQL configuration file in read-only mode
+     # - ./db/my.cnf:/etc/mysql/my.cnf:ro  # Use a custom MySQL configuration file in read-only mode
     networks:
       - app-network  # Connect the database service to the custom application network
     restart: unless-stopped  # Restart the container unless explicitly stopped
@@ -70,7 +72,12 @@ services:
     environment:
       - TZ=Asia/Jerusalem  # Set the timezone for the NGINX container
     restart: unless-stopped  # Restart the container unless explicitly stopped
-
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]  # Check if NGINX is reachable
+      interval: 30s  # Perform the health check every 30 seconds
+      timeout: 10s  # Timeout for the health check is 10 seconds
+      retries: 3  # Retry the health check 3 times before marking the service unhealthy
+      start_period: 10s  # Delay health checks for 10 seconds after the container starts
 
 # Network Definition
 networks:
