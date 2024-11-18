@@ -2,8 +2,8 @@ services:
   # Database Service (MySQL)
   db:
     build:
-     context: .  # Use the current directory as the build context
-     dockerfile: db/Dockerfile  # Use the custom Dockerfile
+      context: .
+      dockerfile: db/Dockerfile
     environment:
       MYSQL_ROOT_PASSWORD: 'admin'  # Set root password for MySQL
       MYSQL_DATABASE: 'mydb'  # Create a database named 'mydb'
@@ -11,7 +11,7 @@ services:
       - ./data/db:/var/lib/mysql  # Persist MySQL data on the host machine
       - ./logs/db:/var/log/mysql           # Mount local log directory to MySQL log directory
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql  # Initialize the database using a custom SQL script
-     # - ./db/my.cnf:/etc/mysql/my.cnf:ro  # Use a custom MySQL configuration file in read-only mode
+      #- ./db/my.cnf:/etc/mysql/my.cnf:ro  # Use a custom MySQL configuration file in read-only mode
     networks:
       - app-network  # Connect the database service to the custom application network
     restart: unless-stopped  # Restart the container unless explicitly stopped
@@ -25,7 +25,9 @@ services:
 
   # Flask Application Service
   app:
-    build: ./app  # Build the Docker image for the application using the ./app directory
+    build:
+      context: ./app
+      dockerfile: Dockerfile
     networks:
       - app-network  # Connect the application service to the custom application network
     depends_on:
@@ -39,6 +41,8 @@ services:
       TZ: Asia/Jerusalem  # Set the timezone for the application
     volumes:
       - ./logs/app:/app/logs  # Bind mount for application logs on the host machine
+      - /var/run/docker.sock:/var/run/docker.sock  # Allow Docker to manage and interact with its own processes
+
     logging:
       driver: "json-file"  # Use JSON-file logging driver
       options:

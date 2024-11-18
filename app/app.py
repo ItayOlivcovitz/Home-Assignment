@@ -1,5 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
+
+import docker
 import mysql.connector
 import socket
 from flask import Flask, request, make_response
@@ -7,17 +9,28 @@ from datetime import datetime
 import sys
 import os
 
-# Ensure the logs directory exists
-os.makedirs('/app/logs', exist_ok=True)
+# Initialize Docker client
+client = docker.from_env()
+
+# Get the container ID from the HOSTNAME environment variable
+container_id = os.getenv('HOSTNAME')
+
+# Retrieve container details
+container = client.containers.get(container_id)
+container_name = container.name
+
+# Ensure the logs directory exists for the container
+log_directory = f'/app/logs/{container_name}'
+os.makedirs(log_directory, exist_ok=True)
 
 # Configure logging
-log_file = '/app/logs/app.log'
+log_file = f'{log_directory}/{container_name}.log'
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout),  # Log to stdout
-        RotatingFileHandler(log_file, maxBytes=10 * 1024 * 1024, backupCount=3)  # Log to a file
+        logging.StreamHandler(sys.stdout),
+        RotatingFileHandler(log_file, maxBytes=10 * 1024 * 1024, backupCount=3)
     ]
 )
 logger = logging.getLogger(__name__)
@@ -84,11 +97,18 @@ def index():
         )
 
         # Create the response
-        return make_response(f"server ip: {server_ip}")
+        response = make_response(f"server ip: {server_ip}")
+
+        # Set cookie in response with desired parameters
+        response.set_cookie(
+            'backend_server_ip', server_ip, max_age=300, path='/',
+            httponly=True, secure=True, samesite='Lax'
+        )
+
+        return response
     except Exception as e:
         app.logger.error(f"Error in index route: {e}")
         return make_response("An error occurred while processing the request.", 500)
-
 
 # Route to display the global counter value
 @app.route('/showcount')
